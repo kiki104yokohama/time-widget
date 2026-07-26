@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>時間バランスウィジェット</title>
+<style>
+  :root {
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --text-sub: #666666;
+    --accent: #4a90e2;
+    --border: #e0e0e0;
+    --flip-bg: #2a2a2a;
+    --flip-text: #ffffff;
+    --flip-line: #1a1a1a;
+    --flip-shadow: rgba(0,0,0,0.15);
+    --ok: #2e9c5a;
+    --warn: #e5484d;
+    --amber: #d9822b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --text: #f0f0f0;
+      --text-sub: #888888;
+      --accent: #5ba3f5;
+      --border: #2a2a2a;
+      --flip-bg: #222222;
+      --flip-text: #f0f0f0;
+      --flip-line: #111111;
+      --flip-shadow: rgba(0,0,0,0.4);
+      --ok: #3fb968;
+      --warn: #ff6169;
+      --amber: #e8a04a;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .widget {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* ---- header ---- */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-sub);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #4caf50;
+    animation: pulse 2s infinite;
+  }
+  .status-dot.after { background: #aaa; animation: none; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ---- progress bar ---- */
+  .progress-wrap {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 1s linear;
+  }
+
+  /* ---- display area (就業残りカウントダウン) ---- */
+  .display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 72px;
+  }
+
+  /* simple mode */
+  .simple-group { display: flex; align-items: flex-end; gap: 2px; }
+  .simple-num {
+    font-size: 60px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .simple-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-sub);
+    padding-bottom: 10px;
+    margin-left: 2px;
+  }
+  .simple-sep {
+    font-size: 44px;
+    font-weight: 300;
+    color: var(--text-sub);
+    line-height: 1;
+    padding-bottom: 4px;
+    margin: 0 2px;
+  }
+
+  /* flip mode */
+  .flip-group { display: flex; align-items: center; gap: 8px; }
+  .flip-unit { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .flip-card-wrap { display: flex; gap: 3px; }
+  .flip-card { width: 40px; height: 56px; position: relative; perspective: 200px; }
+  .flip-card-face {
+    width: 100%;
+    height: 100%;
+    background: var(--flip-bg);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--flip-text);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 6px var(--flip-shadow);
+  }
+  .flip-card-face::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    height: 1px;
+    background: var(--flip-line);
+    opacity: 0.5;
+  }
+  .flip-card-face.flipping { animation: flipAnim 0.4s ease forwards; }
+  @keyframes flipAnim {
+    0%   { transform: rotateX(0deg); }
+    50%  { transform: rotateX(-90deg); }
+    100% { transform: rotateX(0deg); }
+  }
+  .flip-unit-label { font-size: 11px; color: var(--text-sub); font-weight: 500; letter-spacing: 0.05em; }
+  .flip-sep { font-size: 32px; font-weight: 700; color: var(--text-sub); padding-bottom: 18px; line-height: 1; }
+
+  /* ---- verdict (差＝一目判定) ---- */
+  .verdict {
+    text-align: center;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .verdict-diff {
+    font-size: 30px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .verdict-msg { font-size: 13px; font-weight: 600; }
+  .v-ok    { color: var(--ok); }
+  .v-amber { color: var(--amber); }
+  .v-over  { color: var(--warn); }
+
+  /* ---- comparison bars ---- */
+  .cmp { display: flex; flex-direction: column; gap: 9px; }
+  .cmp-row { display: flex; align-items: center; gap: 10px; }
+  .cmp-label { font-size: 12px; color: var(--text-sub); min-width: 70px; }
+  .cmp-bar-wrap { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+  .cmp-bar { height: 100%; border-radius: 5px; transition: width 0.5s ease, background 0.3s; }
+  .cmp-bar.day  { background: var(--accent); }
+  .cmp-bar.task { background: var(--ok); }
+  .cmp-bar.task.over { background: var(--warn); }
+  .cmp-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 60px; text-align: right; color: var(--text); }
+
+  .projline { font-size: 12px; color: var(--text-sub); text-align: center; }
+  .projline b { color: var(--text); font-weight: 600; }
+
+  .hint { font-size: 12px; color: var(--text-sub); text-align: center; padding: 8px 0; }
+
+  /* ---- info row ---- */
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-sub);
+  }
+
+  /* ---- controls ---- */
+  .controls-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .controls-toggle-label { font-size: 11px; color: var(--text-sub); letter-spacing: 0.05em; }
+  .controls-toggle-icon { font-size: 11px; color: var(--text-sub); margin-left: 4px; transition: transform 0.2s; }
+  .controls-toggle-icon.open { transform: rotate(180deg); }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+    max-height: 260px;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    opacity: 1;
+  }
+  .controls.hidden { max-height: 0; opacity: 0; }
+  .control-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .control-label { font-size: 12px; color: var(--text-sub); min-width: 64px; }
+  .toggle-group { display: flex; gap: 4px; }
+  .toggle-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-sub);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  input[type="time"], input[type="number"] {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  input[type="number"] { width: 80px; cursor: text; }
+  input[type="number"]:disabled { opacity: 0.5; cursor: not-allowed; }
+  .unit-suffix { font-size: 12px; color: var(--text-sub); }
+  .auto-note { font-size: 11px; color: var(--ok); margin-left: 4px; }
+</style>
+</head>
+<body>
+<div class="widget">
+  <div class="header">
+    <span class="title">時間バランス</span>
+    <span class="status-dot" id="statusDot"></span>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progressBar" style="width:0%"></div>
+  </div>
+
+  <div class="display" id="display"></div>
+
+  <!-- 差＝一目判定 -->
+  <div class="verdict" id="verdict">
+    <span class="verdict-diff" id="verdictDiff">—</span>
+    <span class="verdict-msg" id="verdictMsg"></span>
+  </div>
+
+  <!-- 就業残り vs タスク残り -->
+  <div class="cmp" id="cmp">
+    <div class="cmp-row">
+      <span class="cmp-label">就寝まで</span>
+      <div class="cmp-bar-wrap"><div class="cmp-bar day" id="barDay" style="width:0%"></div></div>
+      <span class="cmp-val" id="valDay">—</span>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">タスク残り</span>
+      <div class="cmp-bar-wrap"><div class="cmp-bar task" id="barTask" style="width:0%"></div></div>
+      <span class="cmp-val" id="valTask">—</span>
+    </div>
+  </div>
+
+  <div class="projline" id="projline"></div>
+
+  <div class="info-row">
+    <span id="infoLeft"></span>
+    <span id="infoRight"></span>
+  </div>
+
+  <div class="controls-toggle" onclick="toggleControls()">
+    <span class="controls-toggle-label">設定</span>
+    <span class="controls-toggle-icon open" id="toggleIcon">▲</span>
+  </div>
+
+  <div class="controls" id="controls">
+    <div class="control-row">
+      <span class="control-label">タスク残り</span>
+      <input type="number" id="taskMin" min="0" step="5" value="" placeholder="0" onchange="onTaskInput()" oninput="onTaskInput()">
+      <span class="unit-suffix">分</span>
+      <span class="auto-note" id="autoNote" style="display:none"></span>
+    </div>
+    <div class="control-row">
+      <span class="control-label">就寝時刻</span>
+      <input type="time" id="endTime" value="22:00" onchange="saveSettings()">
+    </div>
+    <div class="control-row">
+      <span class="control-label">表示</span>
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="btnHMS" onclick="setUnit('hms')">時:分:秒</button>
+        <button class="toggle-btn" id="btnMS" onclick="setUnit('ms')">分:秒</button>
+        <button class="toggle-btn" id="btnM" onclick="setUnit('m')">分</button>
+      </div>
+    </div>
+    <div class="control-row">
+      <span class="control-label">スタイル</span>
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="btnFlip" onclick="setStyle('flip')">ぱたぱた</button>
+        <button class="toggle-btn" id="btnSimple" onclick="setStyle('simple')">シンプル</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- state ---
+  let unitMode = 'hms';   // 'hms' | 'ms' | 'm'
+  let styleMode = 'flip'; // 'flip' | 'simple'
+  let prevValues = {};
+  let taskRemainMin = null; // 当日タスクの残り見積（分）。null=未設定
+  let taskCount = null;     // 残りタスク件数（data.json 由来）
+  let autoMode = false;     // data.json から取得できているか
+
+  // --- persist ---
+  function saveSettings() {
+    const s = {
+      unitMode,
+      styleMode,
+      end: document.getElementById('endTime').value,
+      taskMin: taskRemainMin,
+    };
+    try { localStorage.setItem('twSettings', JSON.stringify(s)); } catch(e) {}
+  }
+  function loadSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem('twSettings') || '{}');
+      if (s.unitMode)  unitMode  = s.unitMode;
+      if (s.styleMode) styleMode = s.styleMode;
+      if (s.end) document.getElementById('endTime').value = s.end;
+      if (typeof s.taskMin === 'number') {
+        taskRemainMin = s.taskMin;
+        document.getElementById('taskMin').value = s.taskMin;
+      }
+    } catch(e) {}
+    updateButtons();
+  }
+
+  function onTaskInput() {
+    const v = document.getElementById('taskMin').value;
+    taskRemainMin = (v === '' || isNaN(Number(v))) ? null : Math.max(0, Number(v));
+    saveSettings();
+    tick();
+  }
+
+  function setUnit(m)  { unitMode  = m; updateButtons(); saveSettings(); tick(); }
+  function setStyle(m) { styleMode = m; updateButtons(); saveSettings(); prevValues = {}; tick(); }
+
+  function updateButtons() {
+    document.getElementById('btnHMS').classList.toggle('active', unitMode === 'hms');
+    document.getElementById('btnMS').classList.toggle('active',  unitMode === 'ms');
+    document.getElementById('btnM').classList.toggle('active',   unitMode === 'm');
+    document.getElementById('btnFlip').classList.toggle('active', styleMode === 'flip');
+    document.getElementById('btnSimple').classList.toggle('active', styleMode === 'simple');
+  }
+
+  // --- Phase 2 差し込み口: data.json があれば自動取得 ---
+  // 期待する形式: { "taskRemainMin": 190, "updatedAt": "2026-07-26T14:30:00+09:00" }
+  async function fetchTaskData() {
+    try {
+      const res = await fetch('./data.json', { cache: 'no-store' });
+      if (!res.ok) return;
+      const d = await res.json();
+      if (typeof d.taskRemainMin === 'number') {
+        taskRemainMin = Math.max(0, d.taskRemainMin);
+        taskCount = (typeof d.taskCount === 'number') ? d.taskCount : null;
+        autoMode = true;
+        const inp = document.getElementById('taskMin');
+        inp.value = taskRemainMin;
+        inp.disabled = true;
+        const note = document.getElementById('autoNote');
+        note.style.display = '';
+        note.textContent = d.updatedAt ? '自動 · ' + fmtUpdated(d.updatedAt) : '自動取得中';
+        // 就寝時刻も data.json 側を正とする
+        if (d.bedtime && /^\d{1,2}:\d{2}$/.test(d.bedtime)) {
+          document.getElementById('endTime').value = d.bedtime;
+        }
+        tick();
+      }
+    } catch(e) { /* data.json が無ければ手入力モードのまま */ }
+  }
+  function fmtUpdated(iso) {
+    try {
+      const t = new Date(iso);
+      return pad(t.getHours()) + ':' + pad(t.getMinutes()) + ' 更新';
+    } catch(e) { return '更新済'; }
+  }
+
+  // --- time calc ---
+  function getWorkSeconds() {
+    const endVal = document.getElementById('endTime').value;
+    const now = new Date();
+    const toSec = (v) => { const [h, m] = v.split(':').map(Number); return h * 3600 + m * 60; };
+    const nowSec    = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const endSec    = toSec(endVal);
+    const remainSec = Math.max(0, endSec - nowSec);
+    const progress  = Math.min(100, Math.max(0, (nowSec / Math.max(1, endSec)) * 100));
+    const isAfter   = nowSec >= endSec;
+    return { remainSec, progress, isAfter, endSec, nowSec };
+  }
+
+  function secToHMS(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return { h, m, sec };
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmtDur(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.round((sec % 3600) / 60);
+    if (h > 0) return h + 'h' + pad(m) + 'm';
+    return m + 'm';
+  }
+  // 差分表示: 60分以上は「2時間30分」、未満は「45分」
+  function fmtDiff(min) {
+    if (min < 60) return min + '分';
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m === 0 ? h + '時間' : h + '時間' + m + '分';
+  }
+
+  // --- render simple ---
+  function renderSimple(remainSec) {
+    const { h, m, sec } = secToHMS(remainSec);
+    const el = document.getElementById('display');
+    if (unitMode === 'hms') {
+      el.innerHTML = `
+        <div class="simple-group"><span class="simple-num">${pad(h)}</span><span class="simple-label">h</span></div>
+        <span class="simple-sep">:</span>
+        <div class="simple-group"><span class="simple-num">${pad(m)}</span><span class="simple-label">m</span></div>
+        <span class="simple-sep">:</span>
+        <div class="simple-group"><span class="simple-num">${pad(sec)}</span><span class="simple-label">s</span></div>`;
+    } else if (unitMode === 'ms') {
+      const totalM = h * 60 + m;
+      el.innerHTML = `
+        <div class="simple-group"><span class="simple-num">${pad(totalM)}</span><span class="simple-label">m</span></div>
+        <span class="simple-sep">:</span>
+        <div class="simple-group"><span class="simple-num">${pad(sec)}</span><span class="simple-label">s</span></div>`;
+    } else {
+      const totalM = h * 60 + m;
+      el.innerHTML = `<div class="simple-group"><span class="simple-num">${totalM}</span><span class="simple-label">min</span></div>`;
+    }
+  }
+
+  // --- render flip ---
+  function digitsFor(key) { return key === 'tm' ? 4 : 2; }
+
+  function ensureFlipDOM() {
+    const el = document.getElementById('display');
+    const needed = unitMode === 'hms' ? ['h','m','sec'] : unitMode === 'ms' ? ['tm','sec'] : ['tm'];
+    const existing = el.querySelector('.flip-group');
+    if (existing) {
+      const units = existing.querySelectorAll('.flip-unit');
+      const firstKey = needed[0];
+      const expectedCards = el.querySelectorAll(`[id^="fc_${firstKey}_"]`).length;
+      if (units.length === needed.length && expectedCards === digitsFor(firstKey)) return;
+    }
+    let html = '<div class="flip-group">';
+    needed.forEach((key, i) => {
+      const labels = { h:'時間', m:'分', sec:'秒', tm:'分' };
+      const digits = digitsFor(key);
+      let cards = '';
+      for (let d = 0; d < digits; d++) {
+        cards += `<div class="flip-card"><div class="flip-card-face" id="fc_${key}_${d}">0</div></div>`;
+      }
+      html += `<div class="flip-unit"><div class="flip-card-wrap">${cards}</div><span class="flip-unit-label">${labels[key]}</span></div>`;
+      if (i < needed.length - 1) html += '<span class="flip-sep">:</span>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    prevValues = {};
+  }
+
+  function setFlipDigits(key, val) {
+    const digits = digitsFor(key);
+    const s = String(val).padStart(digits, '0');
+    const hideLeading = key === 'tm';
+    let leadingZero = true;
+    for (let i = 0; i < digits; i++) {
+      const card = document.getElementById(`fc_${key}_${i}`)?.closest('.flip-card');
+      const el   = document.getElementById(`fc_${key}_${i}`);
+      if (!el) continue;
+      if (hideLeading) {
+        if (leadingZero && s[i] === '0' && i < digits - 1) {
+          if (card) card.style.display = 'none';
+          continue;
+        } else {
+          leadingZero = false;
+          if (card) card.style.display = '';
+        }
+      }
+      const newD = s[i];
+      const prevKey = `${key}_${i}`;
+      if (prevValues[prevKey] !== newD) {
+        el.textContent = newD;
+        el.classList.remove('flipping');
+        void el.offsetWidth;
+        el.classList.add('flipping');
+        prevValues[prevKey] = newD;
+      }
+    }
+  }
+
+  function renderFlip(remainSec) {
+    ensureFlipDOM();
+    const { h, m, sec } = secToHMS(remainSec);
+    if (unitMode === 'hms') {
+      setFlipDigits('h', h); setFlipDigits('m', m); setFlipDigits('sec', sec);
+    } else if (unitMode === 'ms') {
+      setFlipDigits('tm', h * 60 + m); setFlipDigits('sec', sec);
+    } else {
+      setFlipDigits('tm', h * 60 + m);
+    }
+  }
+
+  // --- comparison / pace ---
+  function renderComparison(dayRemainSec, isAfter) {
+    const verdictDiff = document.getElementById('verdictDiff');
+    const verdictMsg  = document.getElementById('verdictMsg');
+    const barDay  = document.getElementById('barDay');
+    const barTask = document.getElementById('barTask');
+    const valDay  = document.getElementById('valDay');
+    const valTask = document.getElementById('valTask');
+    const projline = document.getElementById('projline');
+    const verdict = document.getElementById('verdict');
+
+    valDay.textContent = isAfter ? '0m' : fmtDur(dayRemainSec);
+
+    if (taskRemainMin === null) {
+      verdict.className = 'verdict';
+      verdictDiff.textContent = '—';
+      verdictDiff.className = 'verdict-diff';
+      verdictMsg.textContent = '「設定」でタスク残り時間（分）を入れてください';
+      verdictMsg.className = 'verdict-msg';
+      valTask.textContent = '—';
+      barDay.style.width = isAfter ? '0%' : '100%';
+      barTask.style.width = '0%';
+      barTask.className = 'cmp-bar task';
+      projline.textContent = '';
+      return;
+    }
+
+    const taskSec = taskRemainMin * 60;
+    const diffSec = dayRemainSec - taskSec;   // +余裕 / −オーバー
+    const over = diffSec < 0;
+    const diffMin = Math.round(Math.abs(diffSec) / 60);
+
+    valTask.textContent = fmtDur(taskSec);
+
+    // bars: 共通スケールで長さ比較
+    const maxSec = Math.max(dayRemainSec, taskSec, 1);
+    barDay.style.width  = (isAfter ? 0 : (dayRemainSec / maxSec) * 100) + '%';
+    barTask.style.width = (taskSec / maxSec) * 100 + '%';
+    barTask.className = 'cmp-bar task' + (over ? ' over' : '');
+
+    // 見込み終了時刻 = 今 + タスク残り
+    const finish = new Date(Date.now() + taskSec * 1000);
+    const finishStr = pad(finish.getHours()) + ':' + pad(finish.getMinutes());
+    const endVal = document.getElementById('endTime').value;
+
+    if (isAfter) {
+      verdict.className = 'verdict';
+      verdictDiff.className = 'verdict-diff ' + (taskSec > 0 ? 'v-over' : 'v-ok');
+      verdictDiff.textContent = taskSec > 0 ? fmtDur(taskSec) + ' 残' : '完了';
+      verdictMsg.className = 'verdict-msg ' + (taskSec > 0 ? 'v-over' : 'v-ok');
+      verdictMsg.textContent = taskSec > 0 ? '就寝時刻を過ぎています' : 'お疲れさまでした';
+      projline.innerHTML = taskSec > 0 ? `このまま続けると <b>${finishStr}</b> まで` : '';
+      return;
+    }
+
+    // ペース判定: 余裕30分以上=OK / 0〜30分=ギリギリ / マイナス=オーバー
+    let cls, sign, msg;
+    if (over) {
+      cls = 'v-over'; sign = '−';
+      msg = '間に合わないペース';
+    } else if (diffSec < 30 * 60) {
+      cls = 'v-amber'; sign = '＋';
+      msg = 'ギリギリ間に合うペース';
+    } else {
+      cls = 'v-ok'; sign = '＋';
+      msg = '間に合うペース（余裕あり）';
+    }
+    verdictDiff.className = 'verdict-diff ' + cls;
+    verdictMsg.className = 'verdict-msg ' + cls;
+    verdictDiff.textContent = sign + fmtDiff(diffMin);
+    verdictMsg.textContent = over ? `${msg}（${fmtDiff(diffMin)}オーバー）` : msg;
+
+    const cnt = taskCount !== null ? ` · 残${taskCount}件` : '';
+    projline.innerHTML = `見込み終了 <b>${finishStr}</b> / 就寝 ${endVal}${cnt}`;
+  }
+
+  // --- main tick ---
+  function tick() {
+    const { remainSec, progress, isAfter } = getWorkSeconds();
+    const dot = document.getElementById('statusDot');
+    dot.className = isAfter ? 'status-dot after' : 'status-dot';
+    document.getElementById('progressBar').style.width = progress + '%';
+
+    // 就業残りカウントダウン
+    if (isAfter) {
+      document.getElementById('display').innerHTML =
+        '<span style="font-size:18px;color:var(--text-sub)">就寝時刻を過ぎました</span>';
+      prevValues = {};
+    } else {
+      if (styleMode === 'flip') renderFlip(remainSec);
+      else renderSimple(remainSec);
+    }
+
+    // 比較・ペース
+    renderComparison(remainSec, isAfter);
+
+    // info row
+    const endVal = document.getElementById('endTime').value;
+    document.getElementById('infoLeft').textContent = `就寝 ${endVal}`;
+    const { h, m, sec } = secToHMS(remainSec);
+    document.getElementById('infoRight').textContent =
+      isAfter ? '—' : `就寝まで ${h}h ${pad(m)}m ${pad(sec)}s`;
+  }
+
+  function toggleControls() {
+    const c = document.getElementById('controls');
+    const icon = document.getElementById('toggleIcon');
+    const isHidden = c.classList.toggle('hidden');
+    icon.classList.toggle('open', !isHidden);
+    try { localStorage.setItem('twControlsOpen', isHidden ? '0' : '1'); } catch(e) {}
+  }
+  function loadControlsState() {
+    try {
+      const v = localStorage.getItem('twControlsOpen');
+      if (v === '0') {
+        document.getElementById('controls').classList.add('hidden');
+        document.getElementById('toggleIcon').classList.remove('open');
+      }
+    } catch(e) {}
+  }
+
+  loadSettings();
+  loadControlsState();
+  tick();
+  setInterval(tick, 1000);
+  fetchTaskData();                       // 起動時に一度
+  setInterval(fetchTaskData, 5 * 60 * 1000); // 以降5分ごと（Phase 2用）
+</script>
+</body>
+</html>

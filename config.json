@@ -1,0 +1,9 @@
+{
+  "bedtime": "22:00",
+  "excludeNames": ["睡眠"],
+  "excludeStatuses": ["完了", "実行せず"],
+  "dataSources": {
+    "行動": "collection://161fee9b-63ac-8131-add8-000bb5978d4f",
+    "リピートタスク": "collection://070fee9b-63ac-824f-bfc3-079c5cae9a9b"
+  }
+}

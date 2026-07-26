@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "time-widget",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "3456", "--directory", "/Users/yamawakitoshiaki/Desktop/Code/time-widget"],
+      "port": 3456
+    }
+  ]
+}
